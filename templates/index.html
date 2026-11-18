@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BlindAssist AI — Hệ thống Hỗ trợ Người Khiếm thị &amp; Cảnh báo Vật cản</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css?v=4.0">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👁️</text></svg>">
+</head>
+<body>
+
+    <!-- ==================== THANH TIÊU ĐỀ & TRỢ NĂNG ==================== -->
+    <header>
+        <div class="brand">
+            <div class="brand-icon" aria-hidden="true">
+                <svg width="26" height="26" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                </svg>
+            </div>
+            <div class="brand-title">
+                <div class="brand-heading-row">
+                    <h1>BlindAssist AI</h1>
+                    <span class="version-pill">v3.0</span>
+                </div>
+                <p>Trợ lý Thị giác Máy tính &amp; Cảnh báo Không gian cho Người Khiếm thị</p>
+            </div>
+        </div>
+
+        <div class="header-badges" role="status" aria-live="polite">
+            <span class="badge" id="cam-status-badge">
+                <span class="status-dot"></span> Camera Đang Tắt
+            </span>
+            <button type="button" class="badge badge-indigo badge-clickable" id="model-status-badge" title="Nhấp để chuyển đổi mô hình AI trong phần Cài đặt">
+                <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                <span id="active-model-badge-text">AI: {{ active_model_name|default('best.pt') }}</span>
+            </button>
+            <span class="badge badge-yellow" id="voice-status-badge">
+                <span class="voice-wave" id="voice-wave-indicator" aria-hidden="true">
+                    <span></span><span></span><span></span>
+                </span>
+                <span id="voice-status-text">Giọng nói: Tiếng Việt</span>
+            </span>
+        </div>
+
+        <!-- THANH CÔNG CỤ TRỢ NĂNG WCAG 2.1 AAA -->
+        <div class="header-actions">
+            <!-- 1. NÚT & MENU TỐC ĐỘ PHÁT KIỂU YOUTUBE -->
+            <div class="speed-menu-wrapper" id="speed-menu-wrapper">
+                <button class="btn-icon" id="btn-speech-rate" title="Chọn tốc độ phát &amp; đọc (Phím S)" aria-label="Tốc độ nói" aria-expanded="false" aria-haspopup="true">
+                    <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    <span id="rate-badge-text">Tốc độ: 1.0x</span>
+                    <svg class="dropdown-caret" width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+
+                <div class="speed-dropdown-menu" id="speed-dropdown-menu" role="menu" aria-label="Menu tốc độ">
+                    <div class="speed-menu-header">
+                        <span class="speed-menu-title">Tốc độ phát &amp; đọc</span>
+                        <span class="speed-menu-badge" id="speed-menu-current-badge">1.00x</span>
+                    </div>
+
+                    <div class="speed-slider-block">
+                        <div class="speed-slider-top">
+                            <span class="speed-slider-label">Tùy chỉnh mượt</span>
+                            <span class="speed-slider-val" id="speed-slider-val">1.00x</span>
+                        </div>
+                        <div class="speed-slider-controls">
+                            <button type="button" class="speed-step-btn" id="btn-speed-minus" title="Giảm tốc độ (0.05x)" aria-label="Giảm tốc độ">−</button>
+                            <input type="range" class="speed-range-input" id="dropdown-speed-slider" min="0.5" max="2.0" step="0.05" value="1.0" aria-label="Thanh kéo tốc độ tùy ý">
+                            <button type="button" class="speed-step-btn" id="btn-speed-plus" title="Tăng tốc độ (0.05x)" aria-label="Tăng tốc độ">+</button>
+                        </div>
+                        <div class="speed-range-ticks">
+                            <span>0.5x</span>
+                            <span>1.0x</span>
+                            <span>1.5x</span>
+                            <span>2.0x</span>
+                        </div>
+                    </div>
+
+                    <div class="speed-preset-list" role="menu">
+                        <button type="button" class="speed-preset-item" data-speed="0.5" role="menuitemradio" aria-checked="false">
+                            <span class="speed-check-icon">✓</span>
+                            <span class="speed-label">0.5x (Rất chậm)</span>
+                        </button>
+                        <button type="button" class="speed-preset-item" data-speed="0.75" role="menuitemradio" aria-checked="false">
+                            <span class="speed-check-icon">✓</span>
+                            <span class="speed-label">0.75x (Chậm)</span>
+                        </button>
+                        <button type="button" class="speed-preset-item active" data-speed="1.0" role="menuitemradio" aria-checked="true">
+                            <span class="speed-check-icon">✓</span>
+                            <span class="speed-label">Chuẩn (1.0x)</span>
+                        </button>
+                        <button type="button" class="speed-preset-item" data-speed="1.25" role="menuitemradio" aria-checked="false">
+                            <span class="speed-check-icon">✓</span>
+                            <span class="speed-label">1.25x (Nhanh)</span>
+                        </button>
+                        <button type="button" class="speed-preset-item" data-speed="1.5" role="menuitemradio" aria-checked="false">
+                            <span class="speed-check-icon">✓</span>
+                            <span class="speed-label">1.5x (Nhanh hơn)</span>
+                        </button>
+                        <button type="button" class="speed-preset-item" data-speed="1.75" role="menuitemradio" aria-checked="false">
+                            <span class="speed-check-icon">✓</span>
+                            <span class="speed-label">1.75x (Rất nhanh)</span>
+                        </button>
+                        <button type="button" class="speed-preset-item" data-speed="2.0" role="menuitemradio" aria-checked="false">
+                            <span class="speed-check-icon">✓</span>
+                            <span class="speed-label">2.0x (Cực nhanh)</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. NÚT NGHE THỬ GIỌNG NÓI -->
+            <button class="btn-icon" id="btn-test-voice" title="Nghe thử phát âm tiếng Việt (Phím V)" aria-label="Nghe thử tiếng Việt">
+                <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"></path></svg>
+                <span>Nghe thử [V]</span>
+            </button>
+
+            <!-- 3. NÚT & MENU ĐIỀU CHỈNH ÂM LƯỢNG LOA CHUẨN LAPTOP -->
+            <div class="volume-menu-wrapper" id="volume-menu-wrapper">
+                <button class="btn-icon active" id="btn-voice-toggle" title="Âm lượng loa laptop (Click mở menu, Cuộn chuột tăng/giảm, Phím M)" aria-label="Âm lượng loa" aria-expanded="false" aria-haspopup="true">
+                    <span id="volume-icon-slot">
+                        <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path></svg>
+                    </span>
+                    <span id="volume-badge-text">Loa: 100%</span>
+                    <svg class="dropdown-caret" width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+
+                <div class="volume-dropdown-menu" id="volume-dropdown-menu" role="menu" aria-label="Menu âm lượng loa laptop">
+                    <div class="volume-menu-header">
+                        <span class="volume-menu-title">Âm lượng Loa &amp; Radar</span>
+                        <span class="volume-menu-badge" id="volume-menu-badge">100%</span>
+                    </div>
+
+                    <div class="volume-slider-block">
+                        <div class="volume-slider-row">
+                            <button type="button" class="volume-mute-btn" id="btn-volume-popup-mute" title="Tắt / Bật tiếng (Phím M)">
+                                <span id="vol-popup-icon-slot">
+                                    <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path></svg>
+                                </span>
+                            </button>
+                            <div class="volume-range-box">
+                                <input type="range" class="volume-range-input" id="dropdown-volume-slider" min="0" max="100" step="1" value="100" aria-label="Thanh trượt âm lượng laptop">
+                                <div class="volume-fill-bar" id="volume-fill-bar" style="width: 100%;"></div>
+                            </div>
+                            <span class="volume-percent-label" id="volume-percent-label">100%</span>
+                        </div>
+
+                        <div class="volume-quick-presets">
+                            <button type="button" class="vol-chip" data-vol="0">0% (Tắt)</button>
+                            <button type="button" class="vol-chip" data-vol="30">30%</button>
+                            <button type="button" class="vol-chip" data-vol="60">60%</button>
+                            <button type="button" class="vol-chip active" data-vol="100">100%</button>
+                        </div>
+
+                        <div class="volume-sonar-row">
+                            <span>Âm thanh Radar Sonar</span>
+                            <label class="mini-switch" title="Bật/Tắt tiếng bíp tiệm cận">
+                                <input type="checkbox" id="popup-sonar-toggle" {% if settings.enable_sonar %}checked{% endif %}>
+                                <span class="mini-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. NÚT TƯƠNG PHẢN CAO (WCAG AAA) -->
+            <button class="btn-icon" id="btn-contrast-toggle" title="Chế độ Tương phản cao cho người thị lực kém (Phím H)" aria-label="Chế độ tương phản cao">
+                <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                <span class="hide-sm">Tương phản</span>
+            </button>
+
+            <!-- 5. NÚT BẢNG PHÍM TẮT -->
+            <button class="btn-icon" id="btn-shortcuts-help" title="Bảng phím tắt trợ năng (Phím ?)" aria-label="Trợ giúp phím tắt">
+                <svg width="17" height="17" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span>Phím tắt</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- ==================== THANH ĐIỀU HƯỚNG 4 TAB ==================== -->
+    <nav class="nav-tabs-wrapper" role="tablist" aria-label="Chế độ hoạt động">
+        <button class="nav-tab active" data-tab="tab-live" role="tab" aria-selected="true">
+            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+            <span>1. Camera Trực tiếp (Webcam)</span>
+        </button>
+        <button class="nav-tab" data-tab="tab-image" role="tab" aria-selected="false">
+            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+            <span>2. Phân tích Hình ảnh</span>
+        </button>
+        <button class="nav-tab" data-tab="tab-video" role="tab" aria-selected="false">
+            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <span>3. Phân tích Video Mẫu</span>
+        </button>
+        <button class="nav-tab" data-tab="tab-settings" role="tab" aria-selected="false">
+            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            <span>4. Tinh chỉnh Cài đặt</span>
+        </button>
+    </nav>
+
+    <!-- ==================== KHU VỰC NỘI DUNG CHÍNH ==================== -->
+    <main>
+        <!-- ==================== TAB 1: WEBCAM TRỰC TIẾP ==================== -->
+        <section class="tab-pane active" id="tab-live" role="tabpanel">
+            <div class="stream-grid">
+                <!-- KHUNG HÌNH CAMERA CHÍNH -->
+                <div class="viewport-card">
+                    <div class="viewport-header">
+                        <span class="viewport-title">
+                            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                            Luồng Camera Thời Gian Thực
+                        </span>
+                        <div class="viewport-header-right">
+                            <span class="badge badge-blue" id="ws-status-pill">⚡ WebSocket Sẵn sàng</span>
+                            <button type="button" class="btn-mini" id="btn-snapshot-live" title="Chụp khung hình hiện tại">
+                                <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                                Chụp ảnh
+                            </button>
+                            <button type="button" class="btn-mini" id="btn-fullscreen-live" title="Mở toàn màn hình">
+                                <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="viewport-container" id="camera-container">
+                        <video id="webcam-video" autoplay playsinline muted></video>
+                        <canvas id="overlay-canvas" class="overlay-canvas"></canvas>
+
+                        <!-- MÀN HÌNH CHỜ KHI CAMERA TẮT -->
+                        <div class="cam-idle-overlay" id="cam-idle-overlay">
+                            <div class="radar-ring-wrap" aria-hidden="true">
+                                <div class="radar-ring"></div>
+                                <div class="radar-ring delay-1"></div>
+                                <div class="radar-core">
+                                    <svg width="34" height="34" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                                </div>
+                            </div>
+                            <h3>Camera AI đang ở chế độ chờ</h3>
+                            <p>Nhấn phím <kbd class="kbd-inline">Space</kbd> hoặc bấm nút bên dưới để kích hoạt quét chướng ngại vật, đo cự ly quang học &amp; cảnh báo giọng nói tiếng Việt.</p>
+                            <button type="button" class="btn btn-primary btn-glow" id="btn-hero-start-cam">
+                                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                Kích Hoạt Quét Camera Ngay
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- THANH CẢNH BÁO NGUY HIỂM -->
+                    <div class="danger-banner safe" id="danger-banner" role="alert">
+                        <div class="banner-content">
+                            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            <span>Đường đi phía trước an toàn. Hệ thống sẵn sàng quét vật cản.</span>
+                        </div>
+                        <span class="badge badge-green">An Toàn</span>
+                    </div>
+
+                    <div class="viewport-controls">
+                        <div class="control-btn-group">
+                            <button class="btn btn-primary" id="btn-toggle-cam">
+                                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                                Bật Camera [Space]
+                            </button>
+                            <button class="btn btn-secondary" id="btn-flip-cam" title="Đổi camera trước / sau (Phím C)">
+                                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                                Đổi Camera [C]
+                            </button>
+                        </div>
+                        <div class="viewport-hint">
+                            Mẹo: Nhấn <kbd class="kbd-inline">Space</kbd> Bật/Tắt • <kbd class="kbd-inline">R</kbd> Đọc lại • <kbd class="kbd-inline">[ / ]</kbd> Âm lượng
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CỘT BẢNG ĐIỀU KHIỂN & THỐNG KÊ (SIDEBAR) -->
+                <div class="dashboard-col">
+                    <!-- THƯỚC ĐO KHOẢNG CÁCH & ĐỊNH HƯỚNG 3 VÙNG -->
+                    <div class="card">
+                        <div class="card-title" style="justify-content:space-between;">
+                            <span class="card-title-left">
+                                <svg width="19" height="19" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                                Cự Ly &amp; Định Hướng Không Gian
+                            </span>
+                            <span class="badge badge-green" id="gauge-level-badge">Thông thoáng</span>
+                        </div>
+
+                        <!-- BẢN ĐỒ 3 VÙNG ĐỊNH HƯỚNG TRỰC QUAN -->
+                        <div class="spatial-zones-mini" id="live-spatial-zones" aria-label="Định hướng 3 vùng không gian">
+                            <div class="zone-pill" id="zone-ind-left">
+                                <span class="zone-dir-name">BÊN TRÁI</span>
+                                <span class="zone-dir-val" id="zone-val-left">Trống</span>
+                            </div>
+                            <div class="zone-pill zone-center" id="zone-ind-center">
+                                <span class="zone-dir-name">PHÍA TRƯỚC</span>
+                                <span class="zone-dir-val" id="zone-val-center">Trống</span>
+                            </div>
+                            <div class="zone-pill" id="zone-ind-right">
+                                <span class="zone-dir-name">BÊN PHẢI</span>
+                                <span class="zone-dir-val" id="zone-val-right">Trống</span>
+                            </div>
+                        </div>
+
+                        <div class="proximity-gauge">
+                            <div class="stat-label">KHOẢNG CÁCH VẬT CẢN GẦN NHẤT</div>
+                            <div class="gauge-value" id="gauge-value">-- m</div>
+                            <div class="gauge-bar-wrapper">
+                                <div class="gauge-bar" id="gauge-bar" style="width: 0%;"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- THỐNG KÊ HIỆU NĂNG -->
+                    <div class="card">
+                        <div class="card-title">
+                            <svg width="19" height="19" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                            Chỉ Số Suy Luận Thời Gian Thực
+                        </div>
+                        <div class="stats-grid">
+                            <div class="stat-box">
+                                <div class="stat-label">Tốc độ xử lý</div>
+                                <div class="stat-val mono" id="stat-fps">-- FPS</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="stat-label">Độ trễ AI</div>
+                                <div class="stat-val mono" id="stat-latency">-- ms</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="stat-label">Số vật cản</div>
+                                <div class="stat-val mono" id="stat-count">0</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="stat-label">Kênh truyền</div>
+                                <div class="stat-val stat-mode-val" id="stat-mode">Sẵn sàng</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- BẢNG DANH SÁCH VẬT THỂ -->
+                    <div class="card">
+                        <div class="card-title">
+                            <svg width="19" height="19" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>
+                            Chi Tiết Vật Thể Phát Hiện
+                        </div>
+                        <div class="items-table-wrapper">
+                            <table class="items-table">
+                                <thead>
+                                    <tr>
+                                        <th>Vật thể</th>
+                                        <th>Vị trí</th>
+                                        <th>Khoảng cách</th>
+                                        <th>Mức rủi ro</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="items-table-body">
+                                    <tr>
+                                        <td colspan="4" class="empty-table-cell">
+                                            Chưa có dữ liệu. Bật camera để bắt đầu quét.
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- NHẬT KÝ GIỌNG NÓI CẢNH BÁO -->
+                    <div class="card">
+                        <div class="card-title" style="justify-content:space-between;">
+                            <span class="card-title-left">
+                                <svg width="19" height="19" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 100-6 3 3 0 000 6z"></path></svg>
+                                Nhật Ký Cảnh Báo Giọng Nói
+                            </span>
+                            <div style="display:flex;gap:0.35rem;">
+                                <button type="button" class="btn-mini" id="btn-repeat-speech" title="Đọc lại câu cảnh báo gần nhất (Phím R)">
+                                    Đọc lại [R]
+                                </button>
+                                <button type="button" class="btn-mini" id="btn-clear-speech" title="Xóa nhật ký giọng nói">
+                                    Xóa
+                                </button>
+                            </div>
+                        </div>
+                        <div class="speech-log" id="speech-log" aria-live="polite">
+                            <div class="speech-bubble">
+                                <strong>Hệ thống sẵn sàng phát cảnh báo tiếng Việt.</strong>
+                                <small>Vừa xong</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== TAB 2: PHÂN TÍCH HÌNH ẢNH ==================== -->
+        <section class="tab-pane" id="tab-image" role="tabpanel">
+            <div class="stream-grid">
+                <div class="viewport-card">
+                    <div class="viewport-header">
+                        <span class="viewport-title">
+                            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                            Phân Tích &amp; Khoanh Vùng Vật Cản Trên Ảnh
+                        </span>
+                        <div class="viewport-header-right">
+                            <span id="image-meta" class="meta-pill">Chưa chọn ảnh</span>
+                            <a id="btn-download-image" href="#" download="blindassist_result.jpg" class="btn-mini" style="display:none; text-decoration:none;">
+                                ⬇ Tải ảnh về
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="viewport-container dropzone-area" id="image-dropzone">
+                        <img id="image-result-view" style="display:none;" alt="Kết quả nhận diện vật cản trên ảnh">
+
+                        <div id="image-loading-overlay" class="loading-overlay" style="display:none;">
+                            <div class="spinner"></div>
+                            <span>Đang phân tích hình ảnh bằng mô hình YOLO...</span>
+                        </div>
+
+                        <div id="image-placeholder" class="upload-placeholder">
+                            <div class="upload-icon-circle">
+                                <svg width="36" height="36" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                            </div>
+                            <h3>Kéo thả hình ảnh vào đây hoặc chọn ảnh</h3>
+                            <p>Hỗ trợ JPG, PNG, WEBP — Tự động làm mờ khuôn mặt, đo khoảng cách &amp; đọc kết quả tiếng Việt sắc nét.</p>
+                            <div style="display:flex; gap:0.75rem; justify-content:center; flex-wrap:wrap;">
+                                <button type="button" class="btn btn-primary btn-glow" id="btn-sample-image">
+                                    <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path></svg>
+                                    Thử Ngay Ảnh Mẫu (test_image.jpg)
+                                </button>
+                                <label class="btn btn-secondary" style="cursor:pointer;">
+                                    <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                                    Chọn Ảnh Từ Máy
+                                    <input type="file" id="image-upload-input-hero" accept="image/*" style="display:none;">
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="danger-banner safe" id="image-danger-banner">
+                        <div class="banner-content">
+                            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            <span id="image-summary-text">Sẵn sàng phân tích hình ảnh tĩnh.</span>
+                        </div>
+                        <span class="badge badge-blue" id="image-risk-badge">Chờ dữ liệu</span>
+                    </div>
+
+                    <div class="viewport-controls">
+                        <div class="control-btn-group">
+                            <label class="btn btn-primary" style="cursor:pointer;">
+                                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                                Tải Lên Ảnh Mới
+                                <input type="file" id="image-upload-input" accept="image/*" style="display:none;">
+                            </label>
+                            <button type="button" class="btn btn-secondary" id="btn-rerun-sample-image">
+                                Ảnh Mẫu Đô Thị
+                            </button>
+                            <button type="button" class="btn btn-secondary" id="btn-speak-image-summary" title="Đọc lại kết quả phân tích ảnh">
+                                🔊 Đọc kết quả
+                            </button>
+                        </div>
+                        <span id="saved-result-badge" style="display:none;"></span>
+                    </div>
+                </div>
+
+                <div class="dashboard-col">
+                    <!-- CHỈ SỐ ẢNH PHÂN TÍCH -->
+                    <div class="stats-row">
+                        <div class="stat-card">
+                            <div class="stat-label">Tổng vật cản</div>
+                            <div class="stat-value mono" id="image-stat-count">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Gần nhất</div>
+                            <div class="stat-value mono" id="image-stat-nearest">-- m</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Thời gian AI</div>
+                            <div class="stat-value mono" id="image-stat-latency">-- ms</div>
+                        </div>
+                    </div>
+
+                    <!-- BẢNG KẾT QUẢ VẬT THỂ TRÊN ẢNH -->
+                    <div class="card" id="image-table-card">
+                        <div class="card-title">
+                            <svg width="19" height="19" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>
+                            Danh Sách Vật Thể Trên Ảnh
+                        </div>
+                        <div class="items-table-wrapper">
+                            <table class="items-table">
+                                <thead>
+                                    <tr>
+                                        <th>Vật thể</th>
+                                        <th>Phương hướng</th>
+                                        <th>Khoảng cách</th>
+                                        <th>Mức rủi ro</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="image-items-table-body">
+                                    <tr>
+                                        <td colspan="4" class="empty-table-cell">
+                                            Tải ảnh lên hoặc nhấn "Thử Ngay Ảnh Mẫu" để xem chi tiết từng vật cản.
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- KẾT QUẢ ĐÃ LƯU TRONG THƯ MỤC RESULTS -->
+                    <div class="card">
+                        <div class="card-title" style="justify-content:space-between;">
+                            <span class="card-title-left">
+                                <svg width="19" height="19" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
+                                Tệp Kết Quả Lưu Trữ (results/)
+                            </span>
+                            <button type="button" class="btn-mini" id="btn-refresh-results" title="Làm mới danh sách kết quả">↻ Làm mới</button>
+                        </div>
+                        <div id="saved-results-list" class="saved-results-list">
+                            <div class="empty-note">Chưa có tệp nào được lưu trong phiên này.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== TAB 3: PHÂN TÍCH VIDEO ==================== -->
+        <section class="tab-pane" id="tab-video" role="tabpanel">
+            <div class="stream-grid">
+                <div class="viewport-card">
+                    <div class="viewport-header">
+                        <span class="viewport-title">
+                            <svg width="19" height="19" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            Trình Phát &amp; Phân Tích Video AI Thời Gian Thực
+                        </span>
+                        <div class="viewport-header-right">
+                            <span class="badge badge-green" id="video-ai-badge">
+                                <span class="status-dot"></span> AI Đang Sẵn Sàng
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="viewport-container" style="position:relative;">
+                        <video id="sample-video-player" controls playsinline muted crossorigin="anonymous">
+                            <source src="/api/stream_sample/test_video.mp4" type="video/mp4">
+                            Trình duyệt của bạn không hỗ trợ phát thẻ video.
+                        </video>
+                        <canvas id="video-overlay-canvas" class="overlay-canvas"></canvas>
+                    </div>
+
+                    <div class="viewport-controls" style="flex-direction:column; align-items:stretch; gap:0.85rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem;">
+                            <div class="control-btn-group">
+                                <button class="btn btn-primary" id="btn-toggle-video">
+                                    <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path></svg>
+                                    <span id="btn-toggle-video-text">Phát &amp; Quét Video AI</span>
+                                </button>
+                                <label class="btn btn-secondary" style="cursor:pointer;" title="Tải lên tệp video MP4/WEBM từ máy tính của bạn để AI phân tích">
+                                    <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                                    Tải Video Lên
+                                    <input type="file" id="video-upload-input" accept="video/*" style="display:none;">
+                                </label>
+                            </div>
+                            <span style="font-size:0.84rem;color:var(--text-secondary);font-weight:600;">Hoặc chọn nhanh 3 video giao thông mẫu:</span>
+                        </div>
+
+                        <!-- 3 VIDEO MẪU TRÊN CÙNG 1 HÀNG -->
+                        <div class="sample-videos-grid">
+                            <button type="button" class="btn btn-secondary btn-sample-video active" data-file="test_video.mp4">
+                                🎬 Video mẫu 1 (Đường phố)
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-sample-video" data-file="test_video1.mp4">
+                                🛵 Video mẫu 2 (Xe &amp; Người)
+                            </button>
+                            <button type="button" class="btn btn-secondary btn-sample-video" data-file="test_video2.mp4">
+                                🚧 Video mẫu 3 (Vật cản vỉa hè)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-col">
+                    <!-- KHUNG CẢNH BÁO NGUY HIỂM TRÊN VIDEO -->
+                    <div class="danger-banner safe" id="video-danger-banner" style="border-radius:12px; border:1px solid rgba(16,185,129,0.3);">
+                        <div class="banner-content">
+                            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            <span>Nhấn Play để AI phát hiện vật cản, phát giọng nói &amp; âm thanh Radar.</span>
+                        </div>
+                        <span class="badge badge-green">Sẵn Sàng</span>
+                    </div>
+
+                    <!-- THỐNG KÊ THỜI GIAN THỰC VIDEO -->
+                    <div class="stats-row">
+                        <div class="stat-card">
+                            <div class="stat-label">Tốc độ quét</div>
+                            <div class="stat-value mono" id="video-stat-fps">0 FPS</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Độ trễ AI</div>
+                            <div class="stat-value mono" id="video-stat-latency">0 ms</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Số vật thể</div>
+                            <div class="stat-value mono" id="video-stat-count">0</div>
+                        </div>
+                    </div>
+
+                    <!-- BẢNG DANH SÁCH VẬT THỂ VIDEO -->
+                    <div class="card">
+                        <div class="card-title">
+                            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
+                            Vật Thể Nhận Diện Trong Khung Hình
+                        </div>
+                        <div class="table-wrapper">
+                            <table class="items-table">
+                                <thead>
+                                    <tr>
+                                        <th>Vật thể</th>
+                                        <th>Phương hướng</th>
+                                        <th>Khoảng cách</th>
+                                        <th>Mức rủi ro</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="video-items-table-body">
+                                    <tr>
+                                        <td colspan="4" class="empty-table-cell">
+                                            Chưa phát video. Nhấn nút Phát (▶️) để AI bắt đầu quét.
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- BÁO CÁO TỔNG HỢP PHIÊN VIDEO -->
+                    <div class="card" id="video-session-card">
+                        <div class="card-title" style="justify-content:space-between;">
+                            <span class="card-title-left">
+                                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                Thống Kê Phiên Phân Tích Video
+                            </span>
+                            <span class="badge badge-blue" id="video-session-status">Đang theo dõi</span>
+                        </div>
+                        <div class="session-summary-grid">
+                            <div class="session-metric">
+                                <span>Khung hình đã quét</span>
+                                <strong class="mono" id="vid-sum-frames">0</strong>
+                            </div>
+                            <div class="session-metric">
+                                <span>Cảnh báo nguy hiểm</span>
+                                <strong class="mono text-red" id="vid-sum-dangers">0</strong>
+                            </div>
+                            <div class="session-metric" style="grid-column: span 2;">
+                                <span>Vật cản sát nhất ghi nhận</span>
+                                <strong id="vid-sum-closest">Chưa có</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== TAB 4: TINH CHỈNH CÀI ĐẶT ==================== -->
+        <section class="tab-pane" id="tab-settings" role="tabpanel">
+            <div class="card settings-container-card">
+                <div class="card-title" style="font-size:1.15rem; margin-bottom:1.25rem;">
+                    <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                    Tinh Chỉnh Thuật Toán AI &amp; Tham Số Hệ Thống
+                </div>
+
+                <form id="settings-form">
+                    <input type="hidden" name="form_submitted" value="1">
+
+                    <div class="settings-grid">
+                        <!-- 1. MÔ HÌNH AI -->
+                        <div class="form-group">
+                            <label for="sel-model">Mô hình AI nhận diện (YOLO Weights)</label>
+                            <select class="form-control" id="sel-model" name="model_name">
+                                {% if available_models %}
+                                    {% for m in available_models %}
+                                    <option value="{{ m.name }}" {% if m.name == active_model_name %}selected{% endif %}>{{ m.label }}</option>
+                                    {% endfor %}
+                                {% else %}
+                                    <option value="best.pt" {% if 'best.pt' in active_model %}selected{% endif %}>best.pt — 10 Lớp Vật Cản Đường Phố VN</option>
+                                    <option value="gpModel.pt" {% if 'gpModel.pt' in active_model %}selected{% endif %}>gpModel.pt — YOLOv8n 80 Lớp Quốc Tế (COCO)</option>
+                                    <option value="yolo26n.pt" {% if 'yolo26n.pt' in active_model %}selected{% endif %}>yolo26n.pt — YOLO26n 80 Lớp Thế Hệ Mới (COCO)</option>
+                                {% endif %}
+                            </select>
+                            <small>Mô hình <strong>best.pt</strong> tối ưu cho đường phố Việt Nam (ổ gà, xe máy, cột điện); <strong>gpModel.pt / yolo26n.pt</strong> hỗ trợ 80 lớp quốc tế.</small>
+                        </div>
+
+                        <!-- 2. NGƯỠNG NGUY HIỂM -->
+                        <div class="form-group">
+                            <label for="inp-danger-distance">Ngưỡng khoảng cách nguy hiểm (mét)</label>
+                            <input type="range" class="form-control-range" id="inp-danger-distance" name="danger_distance" min="1.0" max="8.0" step="0.5" value="{{ settings.danger_distance }}" oninput="document.getElementById('val-danger').innerText = parseFloat(this.value).toFixed(1) + ' m'">
+                            <div class="form-range-val">
+                                <span>1.0 m</span>
+                                <span class="range-current-pill" id="val-danger">{{ settings.danger_distance }} m</span>
+                                <span>8.0 m</span>
+                            </div>
+                            <small>Khi vật cản tiến vào dưới ngưỡng này, hệ thống lập tức kích hoạt khung viền đỏ và đọc cảnh báo ưu tiên.</small>
+                        </div>
+
+                        <!-- 3. CONFIDENCE THRESHOLD -->
+                        <div class="form-group">
+                            <label for="inp-conf-threshold">Ngưỡng độ tin cậy nhận diện (Confidence)</label>
+                            <input type="range" class="form-control-range" id="inp-conf-threshold" name="conf_threshold" min="0.15" max="0.90" step="0.05" value="{{ settings.conf_threshold }}" oninput="document.getElementById('val-conf').innerText = parseFloat(this.value).toFixed(2)">
+                            <div class="form-range-val">
+                                <span>0.15 (Nhạy)</span>
+                                <span class="range-current-pill" id="val-conf">{{ settings.conf_threshold }}</span>
+                                <span>0.90 (Chặt)</span>
+                            </div>
+                            <small>Mức 0.25 - 0.30 cân bằng tối ưu giữa khả năng phát hiện sớm vật thể ở xa và loại bỏ nhiễu.</small>
+                        </div>
+
+                        <!-- 4. FOCAL LENGTH -->
+                        <div class="form-group">
+                            <label for="inp-focal-length">Tiêu cự quang học camera (Focal Length px)</label>
+                            <input type="number" class="form-control" id="inp-focal-length" name="focal_length" min="400" max="1200" step="25" value="{{ settings.focal_length }}">
+                            <small>Chuẩn 650px tương thích tốt với ống kính webcam laptop và camera điện thoại góc mở ~70°.</small>
+                        </div>
+
+                        <!-- 5. GIÃN CÁCH GIỌNG NÓI -->
+                        <div class="form-group">
+                            <label for="inp-speech-cooldown">Chu kỳ giãn cách đọc cảnh báo (Cooldown giây)</label>
+                            <input type="range" class="form-control-range" id="inp-speech-cooldown" name="speech_cooldown" min="1.2" max="6.0" step="0.2" value="{{ settings.speech_cooldown|default(2.8) }}" oninput="document.getElementById('val-cooldown').innerText = parseFloat(this.value).toFixed(1) + 's'">
+                            <div class="form-range-val">
+                                <span>1.2s (Liên tục)</span>
+                                <span class="range-current-pill" id="val-cooldown">{{ settings.speech_cooldown|default(2.8) }}s</span>
+                                <span>6.0s (Thưa)</span>
+                            </div>
+                            <small>Chống đọc lặp gây quá tải thính giác khi người dùng đang đứng yên trước một vật cản.</small>
+                        </div>
+
+                        <!-- 6. NGUỒN PHÁT GIỌNG NÓI -->
+                        <div class="form-group">
+                            <label for="sel-voice-engine">Bộ tổng hợp giọng nói Tiếng Việt (TTS Engine)</label>
+                            <select class="form-control" id="sel-voice-engine" name="voice_engine">
+                                <option value="auto" {% if settings.voice_engine == 'auto' %}selected{% endif %}>Tự động thông minh (Google TTS Cache + Dự phòng Offline)</option>
+                                <option value="google" {% if settings.voice_engine == 'google' %}selected{% endif %}>Google TTS Tiếng Việt Tự Nhiên (Qua máy chủ)</option>
+                                <option value="browser" {% if settings.voice_engine == 'browser' %}selected{% endif %}>Web Speech API Nội Bộ (Trình duyệt Offline)</option>
+                            </select>
+                            <small>Tự động lưu bộ nhớ đệm <code>audio_cache/</code> để đạt độ trễ phát âm 0ms và tự chuyển sang Offline nếu mất mạng.</small>
+                        </div>
+
+                        <!-- 7. TỐC ĐỘ PHÁT ÂM THANH -->
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <label for="range-speech-rate">Tốc độ giọng nói &amp; phát video (Speech Rate: 0.5x – 2.0x)</label>
+                            <div style="display:flex; align-items:center; gap:0.85rem;">
+                                <input type="range" class="form-control-range" id="range-speech-rate" name="speech_rate" min="0.5" max="2.0" step="0.05" value="{{ settings.speech_rate|default(1.0) }}" oninput="setSpeechRate(parseFloat(this.value), false)">
+                                <span id="val-speech-rate" class="range-current-pill" style="min-width:4.4rem; text-align:center;">{{ settings.speech_rate|default(1.0) }}x</span>
+                            </div>
+                            <div style="display:flex; gap:0.5rem; margin-top:0.65rem; flex-wrap:wrap;">
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="setSpeechRate(0.75)">0.75x Chậm</button>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="setSpeechRate(1.0)">1.0x Chuẩn</button>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="setSpeechRate(1.25)">1.25x Nhanh</button>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="setSpeechRate(1.5)">1.5x Rất nhanh</button>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="setSpeechRate(2.0)">2.0x Cực nhanh</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- CÁC CÔNG TẮC TÍNH NĂNG -->
+                    <div class="toggles-section">
+                        <label class="toggle-switch">
+                            <div>
+                                <strong>Làm mờ khuôn mặt người đi bộ (Bảo vệ quyền riêng tư)</strong>
+                                <small>Tự động làm mờ 22% vùng đầu/khuôn mặt của người đi đường theo tiêu chuẩn AI có trách nhiệm.</small>
+                            </div>
+                            <input type="checkbox" id="chk-enable-blur" name="enable_blur" {% if settings.enable_blur %}checked{% endif %}>
+                            <span class="switch-slider"></span>
+                        </label>
+
+                        <label class="toggle-switch">
+                            <div>
+                                <strong>Âm thanh Radar Sonar tiệm cận (Web Audio API)</strong>
+                                <small>Phát xung âm thanh bíp cảnh báo phản xạ nhanh (tần suất tăng dần khi vật cản tiến sát dưới 4.0m).</small>
+                            </div>
+                            <input type="checkbox" id="chk-enable-sonar" name="enable_sonar" {% if settings.enable_sonar %}checked{% endif %}>
+                            <span class="switch-slider"></span>
+                        </label>
+
+                        <label class="toggle-switch">
+                            <div>
+                                <strong>Hiển thị vạch chia 3 làn không gian (Trái / Phía trước / Phải)</strong>
+                                <small>Vẽ lưới phân vùng 35% – 30% – 35% trực tiếp lên màn hình Camera và Video.</small>
+                            </div>
+                            <input type="checkbox" id="chk-show-zones" name="show_zones" {% if settings.show_zones %}checked{% endif %}>
+                            <span class="switch-slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="settings-actions">
+                        <button type="button" class="btn btn-secondary" id="btn-reset-settings">
+                            Khôi Phục Mặc Định
+                        </button>
+                        <button type="submit" class="btn btn-primary btn-glow">
+                            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            Lưu &amp; Áp Dụng Cấu Hình
+                        </button>
+                    </div>
+                </form>
+
+                <!-- BẢNG THAM CHIẾU LỚP VẬT THỂ ĐỘNG & THUẬT TOÁN KHOẢNG CÁCH -->
+                <div class="reference-section">
+                    <div class="card-title" style="justify-content:space-between; flex-wrap:wrap;">
+                        <span class="card-title-left">
+                            <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                            <span id="ref-table-heading">Bảng Tham Chiếu Lớp Vật Cản &amp; Phương Pháp Đo Khoảng Cách</span>
+                        </span>
+                        <span class="badge badge-indigo" id="ref-model-tag">{{ active_model_name|default('best.pt') }}</span>
+                    </div>
+
+                    <div class="formula-callout">
+                        <p><strong>Công thức quang học Pinhole:</strong> <code>Distance = (Real_Height × Focal_Length_Norm) / Bounding_Box_Height</code></p>
+                        <p><strong>Đặc thù mặt đường (Ổ gà):</strong> Tự động chuyển sang phép chiếu hình học mặt phẳng đường (Ground-plane projection) vì ổ gà nằm ngang trên mặt đất.</p>
+                    </div>
+
+                    <div class="items-table-wrapper" style="margin-bottom:1.5rem; max-height:300px;">
+                        <table class="items-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Tên Tiếng Việt</th>
+                                    <th>Nhãn Mô Hình</th>
+                                    <th>Chiều cao chuẩn</th>
+                                    <th>Phương pháp đo</th>
+                                </tr>
+                            </thead>
+                            <tbody id="class-reference-tbody">
+                                {% for c in class_details %}
+                                <tr>
+                                    <td><code>{{ c.id }}</code></td>
+                                    <td><strong>{{ c.display_name }}</strong></td>
+                                    <td>{{ c.raw_name }}</td>
+                                    <td>{% if c.real_height %}{{ "%.2f"|format(c.real_height) }} m{% else %}<em>Mặt đường</em>{% endif %}</td>
+                                    <td>{{ c.method }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="card-title" style="font-size:0.95rem; margin-bottom:0.65rem;">
+                        Thang Đo 4 Cấp Độ Đánh Giá Rủi Ro Va Chạm
+                    </div>
+                    <div class="risk-tiers-grid">
+                        <div class="tier-card tier-red">
+                            <span class="badge badge-red">Rất gần</span>
+                            <div class="tier-dist mono">d ≤ 1.5 m</div>
+                            <small>Nguy cơ va chạm trực diện cao, phát cảnh báo khẩn &amp; bíp liên tục.</small>
+                        </div>
+                        <div class="tier-card tier-yellow">
+                            <span class="badge badge-yellow">Gần</span>
+                            <div class="tier-dist mono">1.5 m &lt; d ≤ 3.0 m</div>
+                            <small>Trong vùng cảnh giác, nhắc người dùng giảm tốc hoặc tránh hướng.</small>
+                        </div>
+                        <div class="tier-card tier-blue">
+                            <span class="badge badge-blue">Trung bình</span>
+                            <div class="tier-dist mono">3.0 m &lt; d ≤ 5.0 m</div>
+                            <small>Cự ly lưu ý an toàn, theo dõi vật cản đang di chuyển lại gần.</small>
+                        </div>
+                        <div class="tier-card tier-green">
+                            <span class="badge badge-green">Xa</span>
+                            <div class="tier-dist mono">d &gt; 5.0 m</div>
+                            <small>Ngoài phạm vi nguy hiểm, lối đi phía trước thông thoáng.</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- ==================== MODAL TRỢ GIÚP PHÍM TẮT ==================== -->
+    <div class="modal-backdrop" id="shortcuts-modal" role="dialog" aria-modal="true" aria-labelledby="shortcuts-modal-title">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3 id="shortcuts-modal-title">Phím Tắt Trợ Năng Không Cần Nhìn Màn Hình</h3>
+                <button class="btn-icon" id="btn-close-modal" style="padding:0.3rem 0.6rem;" aria-label="Đóng hộp thoại">✕</button>
+            </div>
+            <div class="shortcuts-list">
+                <div class="shortcut-item">
+                    <span>Bật / Tắt Quét Camera (hoặc Phát/Dừng Video)</span>
+                    <span class="kbd-badge">Space (Phím Cách)</span>
+                </div>
+                <div class="shortcut-item">
+                    <span>Chuyển nhanh giữa 4 Tab chức năng</span>
+                    <span class="kbd-badge">Phím 1 / 2 / 3 / 4</span>
+                </div>
+                <div class="shortcut-item">
+                    <span>Bật / Tắt Tiếng Loa (Mute / Unmute)</span>
+                    <span class="kbd-badge">Phím M</span>
+                </div>
+                <div class="shortcut-item">
+                    <span>Tăng / Giảm Âm Lượng Loa (±5%)</span>
+                    <span class="kbd-badge">Phím ] / [ hoặc Cuộn chuột</span>
+                </div>
+                <div class="shortcut-item">
+                    <span>Đổi Tốc Độ Nói (0.5x – 2.0x)</span>
+                    <span class="kbd-badge">Phím S</span>
+                </div>
+                <div class="shortcut-item">
+                    <span>Đọc Lại Cảnh Báo Gần Nhất</span>
+                    <span class="kbd-badge">Phím R</span>
+                </div>
+                <div class="shortcut-item">
+                    <span>Nghe Thử Giọng Đọc Tiếng Việt</span>
+                    <span class="kbd-badge">Phím V</span>
+                </div>
+                <div class="shortcut-item">
+                    <span>Đổi Camera Trước / Sau (Điện thoại)</span>
+                    <span class="kbd-badge">Phím C</span>
+                </div>
+                <div class="shortcut-item">
+                    <span>Bật / Tắt Chế Độ Tương Phản Cao</span>
+                    <span class="kbd-badge">Phím H</span>
+                </div>
+            </div>
+            <div style="margin-top:1.25rem; text-align:right;">
+                <button class="btn btn-primary" onclick="window.closeShortcutsModal && window.closeShortcutsModal()">Đã Hiểu [Esc]</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== CONTAINER THÔNG BÁO TOAST ==================== -->
+    <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+    <!-- ==================== CHÂN TRANG ==================== -->
+    <footer>
+        <p><strong>BlindAssist AI v3.0</strong> &copy; 2026 — Hệ Thống Thị Giác Máy Tính &amp; Âm Thanh Định Hướng Hỗ Trợ Người Khiếm Thị</p>
+    </footer>
+
+    <script>
+        window.__INITIAL_SETTINGS__ = {{ settings | tojson }};
+    </script>
+    <script src="/static/js/app.js?v=4.0"></script>
+</body>
+</html>

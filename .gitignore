@@ -1,0 +1,23 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Generated runtime caches & outputs
+audio_cache/*.mp3
+audio_cache/*.wav
+results/*.jpg
+results/*.png
+results/*.mp4
+results/*.json
+
+# IDE & OS metadata
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

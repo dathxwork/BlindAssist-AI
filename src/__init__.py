@@ -1,0 +1,3 @@
+"""
+BlindAssist Package
+"""
