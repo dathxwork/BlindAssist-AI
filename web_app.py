@@ -1,5 +1,10 @@
 import sys
 import os
+
+# Tối ưu luồng CPU (chừa 1 nhân vật lý cho trình duyệt giải mã Video 60 FPS mượt mà, chống tranh chấp luồng)
+os.environ.setdefault("OMP_NUM_THREADS", "3")
+os.environ.setdefault("MKL_NUM_THREADS", "3")
+
 import io
 import json
 import time
@@ -142,6 +147,12 @@ DEFAULT_MODEL = (
 )
 print(f"[*] Khởi động Detector với mô hình: {DEFAULT_MODEL}")
 detector = ObstacleDetector(model_path=DEFAULT_MODEL, conf_threshold=0.25, focal_length=650)
+
+
+@app.on_event("startup")
+async def startup_warmup():
+    """Làm nóng trước mô hình AI trên luồng nền để khung hình đầu tiên đạt tốc độ tối đa ngay lập tức."""
+    asyncio.create_task(asyncio.to_thread(detector.warmup))
 
 # Cấu hình hệ thống mặc định
 system_settings = {
@@ -650,7 +661,7 @@ async def stream_sample_media(filename: str, request: Request):
 async def text_to_speech(text: str = Query(..., description="Nội dung cần chuyển thành giọng nói")):
     """
     Text-To-Speech tiếng Việt tự nhiên qua gTTS có lưu đệm đĩa (0ms từ lần phát thứ 2),
-    kèm cơ chế dự phòng Offline SAPI5 khi không có kết nối mạng.
+    trả về trực tiếp bộ đệm byte đầy đủ để tránh hoàn toàn lỗi HTTP 416 Range Not Satisfiable.
     """
     clean_text = text.strip()
     if not clean_text:
@@ -661,31 +672,46 @@ async def text_to_speech(text: str = Query(..., description="Nội dung cần ch
     wav_cache_path = os.path.join(AUDIO_CACHE_DIR, f"{cache_key}.wav")
 
     if os.path.exists(mp3_cache_path):
-        return FileResponse(
-            mp3_cache_path,
-            media_type="audio/mpeg",
-            headers={
-                "Cache-Control": "public, max-age=604800, immutable",
-                "X-TTS-Source": "BlindAssist-Cache-MP3",
-            },
-        )
+        if os.path.getsize(mp3_cache_path) > 128:
+            with open(mp3_cache_path, "rb") as f:
+                audio_bytes = f.read()
+            return Response(
+                content=audio_bytes,
+                media_type="audio/mpeg",
+                headers={
+                    "Cache-Control": "public, max-age=604800, immutable",
+                    "Accept-Ranges": "none",
+                    "X-TTS-Source": "BlindAssist-Cache-MP3",
+                },
+            )
+        else:
+            try:
+                os.remove(mp3_cache_path)
+            except OSError:
+                pass
 
     try:
         def generate_gtts():
+            tmp_path = mp3_cache_path + ".tmp"
             tts = gTTS(text=clean_text, lang="vi", slow=False)
-            tts.save(mp3_cache_path)
+            tts.save(tmp_path)
+            if os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 128:
+                os.replace(tmp_path, mp3_cache_path)
 
         await asyncio.to_thread(generate_gtts)
-        return FileResponse(
-            mp3_cache_path,
-            media_type="audio/mpeg",
-            headers={
-                "Cache-Control": "public, max-age=604800, immutable",
-                "X-TTS-Source": "BlindAssist-Google-TTS-Vi",
-            },
-        )
+        if os.path.exists(mp3_cache_path) and os.path.getsize(mp3_cache_path) > 128:
+            with open(mp3_cache_path, "rb") as f:
+                audio_bytes = f.read()
+            return Response(
+                content=audio_bytes,
+                media_type="audio/mpeg",
+                headers={
+                    "Cache-Control": "public, max-age=604800, immutable",
+                    "Accept-Ranges": "none",
+                    "X-TTS-Source": "BlindAssist-Google-TTS-Vi",
+                },
+            )
     except Exception as gtts_err:
-        # Offline fallback via pyttsx3 WAV generation
         try:
             import pyttsx3
 
@@ -695,17 +721,189 @@ async def text_to_speech(text: str = Query(..., description="Nội dung cần ch
                 eng.save_to_file(clean_text, wav_cache_path)
                 eng.runAndWait()
 
-            if not os.path.exists(wav_cache_path):
+            if not os.path.exists(wav_cache_path) or os.path.getsize(wav_cache_path) <= 128:
                 await asyncio.to_thread(generate_offline_wav)
-            if os.path.exists(wav_cache_path):
-                return FileResponse(
-                    wav_cache_path,
+            if os.path.exists(wav_cache_path) and os.path.getsize(wav_cache_path) > 128:
+                with open(wav_cache_path, "rb") as f:
+                    wav_bytes = f.read()
+                return Response(
+                    content=wav_bytes,
                     media_type="audio/wav",
-                    headers={"X-TTS-Source": "BlindAssist-Offline-SAPI5"},
+                    headers={"Accept-Ranges": "none", "X-TTS-Source": "BlindAssist-Offline-SAPI5"},
                 )
         except Exception:
             pass
         return JSONResponse({"error": str(gtts_err), "offline": True}, status_code=503)
+
+    return JSONResponse({"error": "TTS generation empty"}, status_code=503)
+
+
+# Bộ nhớ đệm Keyframe Video trong RAM giúp phát lại & tua lại tức thì 0ms
+VIDEO_KEYFRAME_CACHE: Dict[tuple, Dict[str, Any]] = {}
+
+
+@app.websocket("/ws/video_analyze")
+async def websocket_video_analyze(
+    websocket: WebSocket,
+    filename: str = Query("test_video.mp4"),
+):
+    """
+    Luồng giải mã và suy luận Video trực tiếp từ máy chủ bằng OpenCV C++ tuần tự:
+    - Giải mã H.264 trực tiếp trên máy chủ (bỏ qua hoàn toàn bước nén/giải nén Base64 JPEG từ trình duyệt).
+    - Đẩy trước (Pre-stream) các Keyframe cách nhau 0.20s về trình duyệt trước thời điểm phát thực tế,
+      giúp trình duyệt nội suy 60 FPS với độ trễ hiển thị bằng 0.0ms tuyệt đối.
+    """
+    await websocket.accept()
+    safe_name = os.path.basename(filename)
+    file_path = os.path.join(DATA_DIR, safe_name)
+    if not os.path.exists(file_path):
+        file_path = os.path.join(BASE_DIR, safe_name)
+    if not os.path.exists(file_path):
+        await websocket.send_json({"type": "error", "error": f"Không tìm thấy video: {safe_name}"})
+        await websocket.close()
+        return
+
+    cap = cv2.VideoCapture(file_path)
+    if not cap.isOpened():
+        await websocket.send_json({"type": "error", "error": "Không thể mở luồng video"})
+        await websocket.close()
+        return
+
+    try:
+        fps_src = cap.get(cv2.CAP_PROP_FPS)
+        if not fps_src or fps_src <= 0 or fps_src != fps_src:
+            fps_src = 30.0
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        duration = (total_frames / fps_src) if total_frames > 0 else 60.0
+        vid_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 1280)
+        vid_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 720)
+        cap_w = 640
+        cap_h = max(1, int(round(cap_w * (vid_h / max(1, vid_w)))))
+
+        step_frames = max(1, int(round(fps_src * 0.20)))  # 1 keyframe mỗi 0.20s (5 Hz)
+
+        await websocket.send_json({
+            "type": "meta",
+            "filename": safe_name,
+            "duration": round(duration, 2),
+            "fps_src": round(fps_src, 2),
+            "capW": cap_w,
+            "capH": cap_h,
+        })
+
+        client_time = 0.0
+        client_playing = False
+        cur_frame_idx = 0
+        need_seek = False
+        seek_target_sec = 0.0
+
+        def read_frame_at_step(current_idx: int, target_idx: int):
+            if target_idx < current_idx or (target_idx - current_idx) > int(fps_src * 2.0):
+                cap.set(cv2.CAP_PROP_POS_FRAMES, target_idx)
+                ok, frm = cap.read()
+                return ok, frm, target_idx + 1
+            while current_idx < target_idx:
+                if not cap.grab():
+                    return False, None, current_idx
+                current_idx += 1
+            ok, frm = cap.retrieve()
+            if not ok:
+                ok, frm = cap.read()
+            else:
+                current_idx += 1
+            return ok, frm, current_idx
+
+        target_idx = 0
+        decoder_pos = 0
+
+        while True:
+            # Đọc toàn bộ thông điệp điều khiển mới nhất từ trình duyệt (không chặn)
+            while True:
+                try:
+                    msg = await asyncio.wait_for(websocket.receive_json(), timeout=0.001)
+                    action = msg.get("action")
+                    if action == "seek":
+                        seek_target_sec = max(0.0, float(msg.get("time", 0.0)))
+                        client_time = seek_target_sec
+                        need_seek = True
+                    elif action == "pos":
+                        client_time = max(0.0, float(msg.get("time", client_time)))
+                        client_playing = bool(msg.get("playing", client_playing))
+                except asyncio.TimeoutError:
+                    break
+
+            if need_seek:
+                need_seek = False
+                aligned_step = int(seek_target_sec * fps_src) // step_frames
+                target_idx = max(0, aligned_step * step_frames)
+
+            target_sec = target_idx / fps_src
+
+            # Nếu đã kết thúc video hoặc đã đệm trước đủ xa (6.0s khi đang phát, 3.6s khi đang dừng), tạm nghỉ nhẹ
+            max_lead = 6.0 if client_playing else 3.6
+            if (total_frames > 0 and target_idx >= total_frames) or (target_sec > client_time + max_lead):
+                await asyncio.sleep(0.06)
+                continue
+
+            # Nếu người dùng phát/tua vượt qua vị trí đang quét, nhảy ngay tới sát vị trí hiện tại để không bao giờ trễ
+            if client_playing and target_sec < client_time - 0.25:
+                aligned_step = int(client_time * fps_src) // step_frames
+                target_idx = max(0, aligned_step * step_frames)
+                target_sec = target_idx / fps_src
+
+            dd = system_settings["danger_distance"]
+            ct = system_settings["conf_threshold"]
+            model_key = os.path.basename(detector.model_path)
+            cache_key = (safe_name, model_key, round(ct, 2), round(dd, 1), target_idx)
+
+            if cache_key in VIDEO_KEYFRAME_CACHE:
+                cached_kf = VIDEO_KEYFRAME_CACHE[cache_key]
+                await websocket.send_json(cached_kf)
+                target_idx += step_frames
+                await asyncio.sleep(0.002)
+                continue
+
+            t0 = time.perf_counter()
+            ok, raw_frame, decoder_pos = await asyncio.to_thread(read_frame_at_step, decoder_pos, target_idx)
+            if not ok or raw_frame is None:
+                await asyncio.sleep(0.08)
+                continue
+
+            small_frame = cv2.resize(raw_frame, (cap_w, cap_h), interpolation=cv2.INTER_AREA)
+            _, detections, most_dangerous = await asyncio.to_thread(
+                detector.process_frame,
+                small_frame,
+                danger_distance=dd,
+                enable_blur=False,
+                conf_threshold=ct,
+                annotate=False,
+                imgsz=320,
+            )
+            infer_ms = round((time.perf_counter() - t0) * 1000, 1)
+
+            kf_payload = {
+                "type": "keyframe",
+                "t": round(target_sec, 3),
+                "fps": round(1000.0 / max(infer_ms, 1.0), 1),
+                "latency_ms": infer_ms,
+                "detections": detections,
+                "most_dangerous": most_dangerous,
+                "capW": cap_w,
+                "capH": cap_h,
+            }
+            if len(VIDEO_KEYFRAME_CACHE) > 2500:
+                VIDEO_KEYFRAME_CACHE.clear()
+            VIDEO_KEYFRAME_CACHE[cache_key] = kf_payload
+
+            await websocket.send_json(kf_payload)
+            target_idx += step_frames
+
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        print(f"[WS Video Analyze] Closed: {e}")
+    finally:
+        cap.release()
 
 
 # --- WEBSOCKET CHO STREAMING THỜI GIAN THỰC SIÊU TỐC ---

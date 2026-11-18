@@ -9,6 +9,7 @@ venv/
 env/
 
 # Generated runtime caches & outputs
+models/*.onnx
 audio_cache/*.mp3
 audio_cache/*.wav
 results/*.jpg
