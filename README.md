@@ -122,7 +122,11 @@ python main.py --source test_video.mp4 --save ket_qua_xuly.mp4
 ### 2. Thuật toán ước lượng khoảng cách (Pinhole Distance Estimation)
 
 Khoảng cách $d$ (mét) từ camera đến vật thể được tính theo công thức quang học lỗ kim:
-$$d = \frac{W_{\text{frame}} \times \left(\frac{0.5}{\tan(\text{FOV} / 2)}\right) \times \text{width\_ratio}}{W_{\text{box}} + 10^{-6}}$$
+
+$$
+d = \frac{W_{\text{frame}} \times \left(\frac{0.5}{\tan(\text{FOV} / 2)}\right) \times \text{width\_ratio}}{W_{\text{box}} + 10^{-6}}
+$$
+
 Trong đó:
 
 - $W_{\text{frame}}$: Chiều rộng khung hình camera (pixels).
@@ -134,18 +138,18 @@ Trong đó:
 
 Dựa vào tọa độ tâm đối tượng $X_{\text{center}} = \frac{x_1 + x_2}{2}$:
 
-- **BÊN TRÁI (LEFT):** $X_{\text{center}} < 35\% \times W_{\text{frame}}$
-- **PHÍA TRƯỚC (AHEAD):** $35\% \times W_{\text{frame}} \le X_{\text{center}} \le 65\% \times W_{\text{frame}}$
-- **BÊN PHẢI (RIGHT):** $X_{\text{center}} > 65\% \times W_{\text{frame}}$
+- **BÊN TRÁI (LEFT):** $X_{\text{center}} \lt 0.35 \times W_{\text{frame}}$
+- **PHÍA TRƯỚC (AHEAD):** $0.35 \times W_{\text{frame}} \le X_{\text{center}} \le 0.65 \times W_{\text{frame}}$
+- **BÊN PHẢI (RIGHT):** $X_{\text{center}} \gt 0.65 \times W_{\text{frame}}$
 
 ### 4. Thang đo 4 cấp độ khoảng cách & đánh giá rủi ro
 
-|     Cấp độ     |           Cự ly ước lượng           |     Mức độ rủi ro      | Hành vi cảnh báo của hệ thống                                  |
-| :------------: | :---------------------------------: | :--------------------: | :------------------------------------------------------------- |
-|  **Rất gần**   |        $d \le 1.5\text{ m}$         | 🔴 Nguy cơ va chạm cao | Phát cảnh báo khẩn cấp tức thì (Radar bíp dồn dập + khung đỏ). |
-|    **Gần**     | $1.5\text{ m} < d \le 3.0\text{ m}$ |      🟡 Cảnh giác      | Nhắc nhở người dùng chú ý giảm tốc độ hoặc chuẩn bị đổi hướng. |
-| **Trung bình** | $3.0\text{ m} < d \le 5.0\text{ m}$ |    🔵 Lưu ý an toàn    | Vật cản ở cự ly an toàn đang tiến lại gần.                     |
-|     **Xa**     |         $d > 5.0\text{ m}$          |       🟢 An toàn       | Ngoài phạm vi nguy hiểm, không gây cản trở di chuyển.          |
+|     Cấp độ     |   Cự ly ước lượng   |     Mức độ rủi ro      | Hành vi cảnh báo của hệ thống                                  |
+| :------------: | :-----------------: | :--------------------: | :------------------------------------------------------------- |
+|  **Rất gần**   |      d ≤ 1.5 m      | 🔴 Nguy cơ va chạm cao | Phát cảnh báo khẩn cấp tức thì (Radar bíp dồn dập + khung đỏ). |
+|    **Gần**     |  1.5 m < d ≤ 3.0 m  |      🟡 Cảnh giác      | Nhắc nhở người dùng chú ý giảm tốc độ hoặc chuẩn bị đổi hướng. |
+| **Trung bình** |  3.0 m < d ≤ 5.0 m  |    🔵 Lưu ý an toàn    | Vật cản ở cự ly an toàn đang tiến lại gần.                     |
+|     **Xa**     |      d > 5.0 m      |       🟢 An toàn       | Ngoài phạm vi nguy hiểm, không gây cản trở di chuyển.          |
 
 ---
 
@@ -179,17 +183,17 @@ Hỗ trợ nhận diện bổ sung: con chó, con mèo, ghế đá công viên, 
 ## ♿ TÍNH NĂNG TRỢ NĂNG DÀNH CHO NGƯỜI KHIẾM THỊ (WCAG 2.1 AAA)
 
 1. **Điều khiển âm lượng loa chuẩn Laptop (Windows 11 / macOS)**:
-   - Thanh trượt mượt mà $0\% - 100\%$ tích hợp trên header web.
+   - Thanh trượt mượt mà 0% – 100% tích hợp trên header web.
    - Nút bật/tắt tiếng (Mute/Unmute) ghi nhớ mức âm lượng trước đó.
-   - **Cuộn con lăn chuột trên nút loa** để tăng/giảm âm lượng $5\%$ tiện lợi.
+   - **Cuộn con lăn chuột trên nút loa** để tăng/giảm âm lượng 5% tiện lợi.
    - Tự động phát âm thanh tick phản hồi giúp người khiếm thị cảm nhận ngay độ to/nhỏ.
-2. **Menu chỉnh tốc độ nói kiểu YouTube ($0.5\text{x} - 2.0\text{x}$)**:
+2. **Menu chỉnh tốc độ nói kiểu YouTube (0.5x – 2.0x)**:
    - Cho phép người khiếm thị nghe quen có thể tăng tốc độ nói để phản xạ nhanh hơn trên đường.
 3. **Bảng phím tắt điều khiển nhanh không cần nhìn màn hình**:
    - `Space`: Bật / Tắt quét camera
    - `M`: Bật / Tắt tiếng loa (Mute / Unmute)
-   - `]`: Tăng âm lượng loa ($+5\%$)
-   - `[`: Giảm âm lượng loa ($-5\%$)
+   - `]`: Tăng âm lượng loa (+5%)
+   - `[`: Giảm âm lượng loa (-5%)
    - `S`: Đổi tốc độ giọng nói
    - `C`: Đổi camera trước / sau (trên điện thoại)
    - `R`: Đọc lại câu cảnh báo gần nhất
