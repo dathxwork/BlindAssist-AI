@@ -581,10 +581,27 @@ async function startCamera() {
         initAudioContext();
         connectStreamWebSocket();
 
-        state.mediaStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: state.facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
-            audio: false,
-        });
+        // 1. Kiểm tra tính khả dụng của API Camera trên trình duyệt
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            showToast("Trình duyệt không hỗ trợ hoặc chặn quyền truy cập Camera trên kết nối này.", "warn", 4000);
+            return;
+        }
+
+        // 2. Mở camera
+        try {
+            state.mediaStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: state.facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+                audio: false,
+            });
+        } catch (firstErr) {
+            state.mediaStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: state.facingMode },
+                audio: false,
+            }).catch(async () => {
+                return await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            });
+        }
+
         videoElement.srcObject = state.mediaStream;
         await videoElement.play();
 
@@ -616,7 +633,7 @@ async function startCamera() {
         runFrameProcessingLoop();
     } catch (err) {
         console.error("Lỗi mở camera:", err);
-        showToast("Không thể truy cập Webcam: " + err.message, "error", 4500);
+        showToast("Không thể truy cập Camera: " + (err.message || err.name), "error", 4000);
     }
 }
 

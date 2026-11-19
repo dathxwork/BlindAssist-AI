@@ -116,7 +116,7 @@ class VoiceAssistant:
             pass
 
     def _speak_gtts_windows(self, message: str) -> bool:
-        """Plays natural Vietnamese speech via cached gTTS + Windows Media Player COM."""
+        """Plays natural Vietnamese speech via cached gTTS + native Windows MCI (0ms latency, no subprocess)."""
         if gTTS is None or os.name != "nt":
             return False
 
@@ -128,31 +128,37 @@ class VoiceAssistant:
                 tts = gTTS(text=message, lang="vi", slow=False)
                 tts.save(mp3_path)
 
-            vol_int = max(0, min(100, int(round(self.volume * 100))))
-            if vol_int == 0:
+            if self.volume <= 0.01:
                 return True
 
-            safe_path = mp3_path.replace("'", "''")
-            ps_cmd = (
-                f"$wmp = New-Object -ComObject WMPlayer.OCX; "
-                f"$wmp.settings.volume = {vol_int}; "
-                f"$wmp.settings.rate = {self.rate_multiplier:.2f}; "
-                f"$wmp.URL = '{safe_path}'; "
-                f"$wmp.controls.play(); "
-                f"$c = 0; "
-                f"while ($wmp.playState -ne 1 -and $c -lt 45) {{ Start-Sleep -Milliseconds 90; $c++ }}; "
-                f"$wmp.close();"
-            )
-            creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-            subprocess.run(
-                ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_cmd],
-                capture_output=True,
-                timeout=6,
-                creationflags=creation_flags,
-            )
-            return True
+            import ctypes
+            winmm = ctypes.windll.winmm
+            abs_path = os.path.abspath(mp3_path).replace('"', '')
+            alias = f"tts_{int(time.time() * 1000)}"
+
+            # 1. Open media file via native Windows MCI
+            res = winmm.mciSendStringW(f'open "{abs_path}" type mpegvideo alias {alias}', None, 0, 0)
+            if res != 0:
+                res = winmm.mciSendStringW(f'open "{abs_path}" alias {alias}', None, 0, 0)
+            if res != 0:
+                return False
+
+            # 2. Set volume (MCI scale 0 - 1000)
+            mci_vol = int(max(0, min(1000, self.volume * 1000)))
+            winmm.mciSendStringW(f'setaudio {alias} volume to {mci_vol}', None, 0, 0)
+
+            # 3. Set speech rate (MCI speed: 1000 = 1.0x, range 500 to 2000)
+            mci_speed = int(max(500, min(2000, self.rate_multiplier * 1000)))
+            winmm.mciSendStringW(f'set {alias} speed {mci_speed}', None, 0, 0)
+
+            # 4. Play synchronously (worker thread waits until speech ends)
+            r_play = winmm.mciSendStringW(f'play {alias} wait', None, 0, 0)
+
+            # 5. Cleanly close alias
+            winmm.mciSendStringW(f'close {alias}', None, 0, 0)
+            return r_play == 0
         except Exception as e:
-            print(f"[VoiceAssistant] gTTS fallback warning: {e}")
+            print(f"[VoiceAssistant] gTTS playback error: {e}")
             return False
 
     def _worker_loop(self):
@@ -198,11 +204,13 @@ class VoiceAssistant:
                     continue
 
                 spoken = False
-                # For Vietnamese without native SAPI5 vi-VN voice, prefer natural gTTS + cache
-                if self.language == "vi" and not has_native_vn_voice:
+                # Ưu tiên phát giọng tiếng Việt chuẩn tự nhiên qua gTTS + cache đĩa (giống hệt trình duyệt)
+                if self.language == "vi":
                     spoken = self._speak_gtts_windows(text)
 
-                if not spoken and engine is not None and self.volume > 0.01:
+                # Chỉ dùng SAPI5 khi là tiếng Anh hoặc khi Windows thực sự có cài giọng tiếng Việt bản địa (tránh giọng Mỹ đọc tiếng Việt)
+                can_use_sapi = (self.language != "vi" or has_native_vn_voice)
+                if not spoken and can_use_sapi and engine is not None and self.volume > 0.01:
                     try:
                         engine.setProperty("volume", self.volume)
                         engine.setProperty("rate", int(self.base_speech_rate * self.rate_multiplier))

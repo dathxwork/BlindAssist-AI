@@ -1,7 +1,5 @@
-# ==============================================================================
 # BlindAssist AI - Dependencies Configuration
 # Cài đặt: pip install -r requirements.txt
-# ==============================================================================
 
 # Core Deep Learning & Computer Vision
 ultralytics>=8.0.0

@@ -22,3 +22,13 @@ results/*.json
 .idea/
 .DS_Store
 Thumbs.db
+
+# Bỏ qua bộ nhớ đệm Python
+__pycache__/
+*.py[cod]
+
+__pycache__/
+*.py[cod]
+agent.md
+AGENTS.md
+.gitignore
